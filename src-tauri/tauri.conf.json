@@ -36,7 +36,8 @@
     "windows": [
       {
         "fullscreen": false,
-        "resizable": true,
+        "resizable": false,
+        "maximizable": false,
         "title": "FolderSync",
         "width": 800,
         "height": 600

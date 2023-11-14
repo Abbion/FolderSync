@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="50.663109mm"
+   height="52.680481mm"
+   viewBox="0 0 50.663109 52.680481"
+   version="1.1"
+   id="svg5"
+   inkscape:export-filename="Edit.svg"
+   inkscape:export-xdpi="183.9772"
+   inkscape:export-ydpi="183.9772"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview7"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     showgrid="false" />
+  <defs
+     id="defs2" />
+  <g
+     inkscape:label="Warstwa 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-82.984507,-6.6806191)">
+    <path
+       style="fill:none;fill-opacity:1;stroke:#262626;stroke-width:6;stroke-linecap:square;stroke-linejoin:miter;stroke-dasharray:none;stroke-dashoffset:8.99528;stroke-opacity:1;paint-order:fill markers stroke"
+       d="m 87.2265,11.181252 42.17912,43.679216"
+       id="path2141"
+       inkscape:export-filename="Delete.svg"
+       inkscape:export-xdpi="183.9772"
+       inkscape:export-ydpi="183.9772" />
+    <path
+       style="fill:none;fill-opacity:1;stroke:#262626;stroke-width:6;stroke-linecap:square;stroke-linejoin:miter;stroke-dasharray:none;stroke-dashoffset:8.99528;stroke-opacity:1;paint-order:fill markers stroke"
+       d="M 129.15768,10.921441 87.474438,55.120279"
+       id="path2141-2" />
+  </g>
+</svg>

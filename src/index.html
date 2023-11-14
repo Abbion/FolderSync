@@ -15,32 +15,92 @@
 
   <body>
     <div class="container">
-      <h1>Welcome to Tauri!</h1>
-
-      <div class="row">
-        <a href="https://tauri.app" target="_blank">
-          <img src="/assets/tauri.svg" class="logo tauri" alt="Tauri logo" />
-        </a>
-        <a
-          href="https://developer.mozilla.org/en-US/docs/Web/JavaScript"
-          target="_blank"
-        >
-          <img
-            src="/assets/javascript.svg"
-            class="logo vanilla"
-            alt="JavaScript logo"
-          />
-        </a>
+      <div class="window-title">
+        <p1>Main Window</p1>
       </div>
+      <div class="content">
+        <div class="table-header">
+          <p1>Sync state</p1>
+          <p1>Sync <br> From</p1>
+          <p1>Sync <br> To</p1>
+          <p1>Edit</p1>
+          <p1>Delete</p1>
+        </div>
+        <div class="sync-table">
+          <div class="sync-entry">
+            <div class="state">
+            </div>
+            <p2 class="from-folder" title="C:\MyFiles\Documents\Article\test\test\test">
+              C:\MyFiles\Documents\Article\test\test\test
+            </p2>
+            <p2 class="to-folder" title="E:\Backup\MyFiles\Documents\Article\test\test\test">
+              E:\Backup\MyFiles\Documents\Article\test\test\test
+            </p2>
+            <div class="sync-icons edit-icon">
+              <img src="assets/Edit.svg"/>
+            </div>
+            <div class="sync-icons delete-icon">
+              <img src="assets/Delete.svg"/>
+            </div>
+          </div>
+        </div>
+        <button class="add-sync-entry-button">
+          Add new sync
+        </button>
+      </div>
+      <div class="version">
+        <p1>
+          Version 0.1
+        </p1>
+      </div>
+      <div class="edit-box">
+        <div class="edit-box-title">
+          <p2>
+            Edit sync window
+          </p2>
+        </div>
+        <div class="edit-path">
+          <p2>
+            Sync From
+          </p2>
+          <div class="edit-path-selector">
+            <p1>
+              C:\MyFiles\Documents\Article\test\test\test
+            </p1>
+            <img src="assets/OpenFolder.svg"/>
+          </div>
+        </div>
 
-      <p>Click on the Tauri logo to learn more about the framework</p>
-
-      <form class="row" id="greet-form">
-        <input id="greet-input" placeholder="Enter a name..." />
-        <button type="submit">Greet</button>
-      </form>
-
-      <p id="greet-msg"></p>
+        <div class="edit-path">
+          <p2>
+            Sync To
+          </p2>
+          <div class="edit-path-selector">
+            <p1>
+              C:\MyFiles\Documents\Article\test\test\test
+            </p1>
+            <img src="assets/OpenFolder.svg"/>
+          </div>
+        </div>
+        
+        <div class="edit-interval">
+          <p2>
+            Sync Interval
+          </p2>
+          <div class="interval-settings">
+            <input type="text" value="10">
+            <select name="intervals" id="cars">
+              <option value="second">s</option>
+              <option value="minute">m</option>
+              <option value="hour">h</option>
+            </select>
+          </div>
+        </div>
+        <div class="edit-action-buttons">
+          <button type="button">Save</button>
+          <button type="button">Cancel</button>
+        </div>
+      </div>
     </div>
   </body>
 </html>
