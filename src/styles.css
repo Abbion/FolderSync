@@ -18,6 +18,10 @@ body {
   font-family: "Consolas";
 }
 
+button:hover{
+  cursor: pointer;
+}
+
 .container {
   position: relative;
   margin: 0;
@@ -77,6 +81,10 @@ p2{
   border-radius: 100%;
 }
 
+.state:hover{
+  cursor: pointer;
+}
+
 .from-folder{
   width: 92%;
   margin-left: 1.25em;
@@ -99,6 +107,10 @@ p2{
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.sync-icons:hover{
+  cursor: pointer;
 }
 
 .edit-icon{
@@ -180,15 +192,20 @@ p2{
 .edit-path-selector > p1{
   margin-left: 0.5em;
   width: 85%;
-
+  
   overflow: hidden;
   text-overflow: ellipsis;
+  text-wrap: nowrap;
 }
 
 .edit-path-selector > img{
   margin-left: 0.75em;
   height: 40%;
   width: auto;
+}
+
+.edit-path-selector > img:hover{
+  cursor: pointer;
 }
 
 .edit-interval{

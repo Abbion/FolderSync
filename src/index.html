@@ -3,9 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="styles.css" />
+    <script src="htmlTemplates.js"></script>
+    <script src="main.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri App</title>
-    <script type="module" src="/main.js" defer></script>
+    <title>Folder sync</title>
     <style>
       .logo.vanilla:hover {
         filter: drop-shadow(0 0 2em #ffe21c);
@@ -26,9 +27,9 @@
           <p1>Edit</p1>
           <p1>Delete</p1>
         </div>
-        <div class="sync-table">
+        <div id="sync-table" class="sync-table">
           <div class="sync-entry">
-            <div class="state">
+            <div class="state" onclick="enableSync(0)">
             </div>
             <p2 class="from-folder" title="C:\MyFiles\Documents\Article\test\test\test">
               C:\MyFiles\Documents\Article\test\test\test
@@ -36,15 +37,15 @@
             <p2 class="to-folder" title="E:\Backup\MyFiles\Documents\Article\test\test\test">
               E:\Backup\MyFiles\Documents\Article\test\test\test
             </p2>
-            <div class="sync-icons edit-icon">
+            <div class="sync-icons edit-icon" onclick="editRecord(0)">
               <img src="assets/Edit.svg"/>
             </div>
-            <div class="sync-icons delete-icon">
+            <div class="sync-icons delete-icon" onclick="deleteRecord(0)">
               <img src="assets/Delete.svg"/>
             </div>
           </div>
         </div>
-        <button class="add-sync-entry-button">
+        <button class="add-sync-entry-button" onclick="openEditBox()">
           Add new sync
         </button>
       </div>
@@ -53,7 +54,7 @@
           Version 0.1
         </p1>
       </div>
-      <div class="edit-box">
+      <div class="edit-box" id="edit-box">
         <div class="edit-box-title">
           <p2>
             Edit sync window
@@ -65,9 +66,9 @@
           </p2>
           <div class="edit-path-selector">
             <p1>
-              C:\MyFiles\Documents\Article\test\test\test
+              Select folder
             </p1>
-            <img src="assets/OpenFolder.svg"/>
+            <img src="assets/OpenFolder.svg" onclick="openFolder(this)"/>
           </div>
         </div>
 
@@ -77,9 +78,9 @@
           </p2>
           <div class="edit-path-selector">
             <p1>
-              C:\MyFiles\Documents\Article\test\test\test
+              Select folder
             </p1>
-            <img src="assets/OpenFolder.svg"/>
+            <img src="assets/OpenFolder.svg" onclick="openFolder(this)"/>
           </div>
         </div>
         
@@ -88,8 +89,8 @@
             Sync Interval
           </p2>
           <div class="interval-settings">
-            <input type="text" value="10">
-            <select name="intervals" id="cars">
+            <input id="interval-value" type="text" maxlength="3" oninput="validateIntervalValue(this)" onchange="checkIfValueIsEmpty(this)" value="10">
+            <select id="interval-type" name="intervals" id="cars">
               <option value="second">s</option>
               <option value="minute">m</option>
               <option value="hour">h</option>
@@ -97,8 +98,8 @@
           </div>
         </div>
         <div class="edit-action-buttons">
-          <button type="button">Save</button>
-          <button type="button">Cancel</button>
+          <button type="button" onclick="saveRecord()" >Save</button>
+          <button type="button" onclick="closeEditBox()">Cancel</button>
         </div>
       </div>
     </div>
