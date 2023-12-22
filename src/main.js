@@ -1,9 +1,51 @@
-//const { invoke } = window.__TAURI__.tauri;
-
 //let greetInputEl;
 //let greetMsgEl;
 
+const { invoke } = window.__TAURI__.tauri;
 const { open } = window.__TAURI__.dialog;
+
+//Rust handlers
+async function addNewSync(syncData, id) {
+  return await invoke("add_sync", { syncData: { from_path: syncData.paths[0],
+                                                to_path: syncData.paths[1],
+                                                interval_value: syncData.intervalValue,
+                                                interval_type: syncData.intervalType.toUpperCase()
+                                              },
+                                    id: id });
+}
+
+async function deleteSync(id) {
+  return await invoke("delete_sync", { id: id });
+}
+
+async function replaceSync(syncData, id) {
+  return await invoke("replace_sync", { syncData: { from_path: syncData.paths[0],
+                                                    to_path: syncData.paths[1],
+                                                    interval_value: syncData.intervalValue,
+                                                    interval_type: syncData.intervalType.toUpperCase()
+                                              },
+                                        id: id });
+}
+
+async function saveEditedID(id) {
+  await invoke("save_edited_id", { editedId: id });
+}
+
+async function resetEdit() {
+  await invoke("reset_edit");
+}
+
+async function getNextID() {
+  return await invoke("get_next_id");
+}
+
+async function isEdited() {
+  return await invoke("is_edited");
+}
+
+async function validatePaths(pathFrom, pathTo) {
+  return await invoke("validate_paths", { pathFrom: pathFrom, pathTo: pathTo });
+}
 
 const defaultPath = "Select folder";
 const defaultIntervalValue = 10;
@@ -34,6 +76,11 @@ function closeEditBox(){
     console.error("interval value not found");
 }
 
+async function addSyncNewPressed() {
+  await resetEdit();
+  openEditBox();
+}
+
 function openEditBox(){
   let editBox = document.getElementById('edit-box');
 
@@ -52,9 +99,9 @@ function getData(){
   if(editBox){
     let filePaths = editBox.getElementsByTagName("p1");
     for (let path of filePaths){
-      if(path.innerHTML.length === 0 || path.innerHTML === defaultPath){
+      if(path.innerHTML.length === 0 || path.innerHTML.trim() === defaultPath){
         window.alert("empty path");
-        return;
+        return {};
       }
       else{
         paths.push(path.innerHTML.trim());
@@ -64,12 +111,11 @@ function getData(){
     let intervalInput = document.getElementById('interval-value');
 
     if(intervalInput){
-      intervalValue = intervalInput.value;
-      //Check if empty and is a number
+      intervalValue = parseInt(intervalInput.value);
     }
     else{
       console.error("Element: " + intervalInput);
-      return;
+      return {};
     }
 
     let intervalSelector = document.getElementById('interval-type');
@@ -79,7 +125,7 @@ function getData(){
     }
     else{
       console.error("Element: " + intervalInput);
-      return;
+      return {};
     }
 
     return {
@@ -94,45 +140,54 @@ function getData(){
   return {};
 }
 
-function validatePath(path){
-  console.log("Validating: " + path);
-
-  return true;
-}
-
-function addRecord(syncData, id){
+async function addRecord(syncData, id){
   console.log("Add record: ", syncData);
-
-  //Add data to the database and rust state
-  //Get info if the data was saved
   
-  //Create hmtl code
-  const entryHtml = createNewSyncEntryHtml(syncData.paths, id);
-  let syncTable = document.getElementById("sync-table");
+  const add_state = await addNewSync(syncData, id);
+  
+  console.log("add state: " + add_state);
 
-  if (syncTable) {
-    syncTable.innerHTML += entryHtml;
+  //Create hmtl code
+  if (add_state) {
+    const entryHtml = createNewSyncEntryHtml(syncData.paths, id);
+    let syncTable = document.getElementById("sync-table");
+
+    if (syncTable) {
+      syncTable.innerHTML += entryHtml;
+    }
+  }
+  else {
+    //Display adding error
   }
 }
 
-function saveRecord(){
+async function saveRecord() {
   console.log("Save record");
   const data = getData();
+
+  console.log(data);
 
   if (Object.keys(data).length != 3){
     console.error("Incorrect amount of keys");
     return;
   }
 
-  if (validatePath(data.paths[0]) && validatePath(data.paths[1])) {
-    //Get Id for new entry
-    //Or check if it was eddited and get the id for the current edited value
-    //If it was edited, replace the code
-    //If it was new add new entry
-    //const id = getNextID()
+  const isEditedPromise = isEdited();
+  const valid = await validatePaths(data.paths[0], data.paths[1])
 
-    const id = 534;
-    addRecord(data, id);
+  if (valid == null) {
+    let id = await isEditedPromise;
+
+    if (id == null) {
+      id = await getNextID();
+      addRecord(data, id);
+    }
+    else {
+      //replaceRecord();
+    }
+  }
+  else{
+    console.error("Paths are not valid code:", valid);
   }
 
   closeEditBox();
@@ -153,8 +208,10 @@ function deleteRecord(syncID) {
   //Find the entry and delete it
 }
 
-function editRecord(syncID){
+async function editRecord(syncID){
   console.log("Edit record");
+
+  await saveEditedID(syncID);
 
   //Get the syncData from db
   const result = {
@@ -163,7 +220,8 @@ function editRecord(syncID){
     intervalType: 'm'
   };
 
-  //Open the editBox
+  openEditBox();
+
   //Fill the edit box with data
 }
 
