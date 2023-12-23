@@ -5,11 +5,12 @@ const { invoke } = window.__TAURI__.tauri;
 const { open } = window.__TAURI__.dialog;
 
 //Rust handlers
-async function addNewSync(syncData, id) {
+async function addSync(syncData, id) {
   return await invoke("add_sync", { syncData: { from_path: syncData.paths[0],
                                                 to_path: syncData.paths[1],
                                                 interval_value: syncData.intervalValue,
-                                                interval_type: syncData.intervalType.toUpperCase()
+                                                interval_type: syncData.intervalType.toUpperCase(),
+                                                enabled: true
                                               },
                                     id: id });
 }
@@ -22,43 +23,55 @@ async function replaceSync(syncData, id) {
   return await invoke("replace_sync", { syncData: { from_path: syncData.paths[0],
                                                     to_path: syncData.paths[1],
                                                     interval_value: syncData.intervalValue,
-                                                    interval_type: syncData.intervalType.toUpperCase()
+                                                    interval_type: syncData.intervalType.toUpperCase(),
+                                                    enabled: true //This will be overwritten by the replaced entry
                                               },
                                         id: id });
 }
 
-async function saveEditedID(id) {
-  await invoke("save_edited_id", { editedId: id });
+async function getSync(id) {
+  return await invoke("get_sync", { id: id });
 }
 
-async function resetEdit() {
-  await invoke("reset_edit");
-}
-
-async function getNextID() {
-  return await invoke("get_next_id");
-}
-
-async function isEdited() {
-  return await invoke("is_edited");
+async function switchSync(id) {
+  return await invoke("switch_sync", { id: id });
 }
 
 async function validatePaths(pathFrom, pathTo) {
   return await invoke("validate_paths", { pathFrom: pathFrom, pathTo: pathTo });
 }
 
+async function getNextID() {
+  return await invoke("get_next_id");
+}
+
+async function saveEditedID(id) {
+  await invoke("save_edited_id", { id: id });
+}
+
+async function resetEdit() {
+  await invoke("reset_edit");
+}
+
+async function isEdited() {
+  return await invoke("is_edited");
+}
+
+//Constants
 const defaultPath = "Select folder";
 const defaultIntervalValue = 10;
 const syncEnableColor = "#05A66B"
 const syncDisabledColor = "#262626"
 
+//Main code
 function closeEditBox(){
   let editBox = document.getElementById('edit-box');
 
   if(editBox){
     let filePaths = editBox.getElementsByTagName("p1");
     for (let path of filePaths){
-      path.innerHTML = defaultPath
+      path.innerHTML = defaultPath;
+      path.title = "";
     }
     console.log(filePaths);
 
@@ -90,7 +103,48 @@ function openEditBox(){
     console.error("Element: " + editBox);
 }
 
-function getData(){
+function setData(data) {
+  let editBox = document.getElementById('edit-box');
+  let paths = [];
+  let intervalValue;
+  let intervalType;
+
+  if (editBox) {
+    let filePaths = editBox.getElementsByTagName("p1");
+
+    paths.push(data.from_path);
+    paths.push(data.to_path);
+
+    let itr = 0;
+    for (let path of filePaths){
+      path.innerHTML = paths[itr];
+      path.title = paths[itr];
+      itr++;
+    }
+  }
+
+  let intervalInput = document.getElementById('interval-value');
+
+  if (intervalInput) {
+    intervalInput.value = data.interval_value;
+  }
+  else{
+    console.error("Element: " + intervalInput);
+    return {};
+  }
+
+  let intervalSelector = document.getElementById('interval-type');
+
+  if (intervalSelector) {
+    intervalSelector.value = data.interval_type.toLowerCase();
+  }
+  else{
+    console.error("Element: " + intervalInput);
+    return {};
+  }
+}
+
+function getData() {
   let editBox = document.getElementById('edit-box');
   let paths = [];
   let intervalValue;
@@ -143,7 +197,7 @@ function getData(){
 async function addRecord(syncData, id){
   console.log("Add record: ", syncData);
   
-  const add_state = await addNewSync(syncData, id);
+  const add_state = await addSync(syncData, id);
   
   console.log("add state: " + add_state);
 
@@ -183,7 +237,7 @@ async function saveRecord() {
       addRecord(data, id);
     }
     else {
-      //replaceRecord();
+      replaceSync(data, id);
     }
   }
   else{
@@ -193,57 +247,50 @@ async function saveRecord() {
   closeEditBox();
 }
 
-function deleteRecord(syncID) {
-  console.log("Delete record")
+async function deleteRecord(syncID) {
+  console.log("Delete record");
 
-  //Detete the sync from the database and state
-  //Get the result 
-  const result = true;
-  const syncEntry = document.getElementById("sync-entry-" + syncID);
+  const result = await deleteSync(syncID);
 
-  if (syncEntry){
-    syncEntry.remove();
+  if (result) {
+    const syncEntry = document.getElementById("sync-entry-" + syncID);
+
+    if (syncEntry){
+      syncEntry.remove();
+    }
   }
-
-  //Find the entry and delete it
 }
 
-async function editRecord(syncID){
+async function editRecord(id) {
   console.log("Edit record");
 
-  await saveEditedID(syncID);
+  await saveEditedID(id);
 
-  //Get the syncData from db
-  const result = {
-    paths: ["Test1", "Test2"],
-    intervalValue: 420,
-    intervalType: 'm'
-  };
+  let syncData = await getSync(id);
+  console.log(syncData);
 
   openEditBox();
 
-  //Fill the edit box with data
+  setData(syncData);
 }
 
-function enableSync(syncID){
+async function enableSync(id) {
   console.log("Enable sync");
 
-  //Get the state for this sync
-  //Return new state
-  const newState = false;
+  const newStatePromise = switchSync(id);
 
-  const syncEntry = document.getElementById("sync-entry-" + syncID);
+  const syncEntry = document.getElementById("sync-entry-" + id);
 
   if (syncEntry){
     let state = syncEntry.getElementsByClassName("state")[0];
     
     if (state) {
-      state.style.backgroundColor = (newState ? syncEnableColor : syncDisabledColor);
+      state.style.backgroundColor = (await newStatePromise ? syncEnableColor : syncDisabledColor);
     }
   }
 }
 
-async function openFolder(htmlElement){
+async function openFolder(htmlElement) {
   console.log("Open folder");
 
   try{

@@ -5,19 +5,22 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::path::Path;
 
-#[derive(serde::Deserialize, Debug)]
+use serde::Serialize;
+
+#[derive(serde::Deserialize, Debug, Clone, Serialize)]
 enum IntervalType {
     SECOND,
     MINUTE,
     HOUR
 }
 
-#[derive(serde::Deserialize, Debug,)]
+#[derive(serde::Deserialize, Debug, Clone, Serialize)]
 struct SyncData {
     from_path: String,
     to_path: String,
     interval_value: i32,
-    interval_type: IntervalType
+    interval_type: IntervalType,
+    enabled: bool
 }
 
 struct Database {
@@ -45,6 +48,8 @@ fn add_sync(sync_data: SyncData, id: i64, database: tauri::State<Database>) -> b
 
 #[tauri::command]
 fn delete_sync(id: i64, database: tauri::State<Database>) -> bool {
+    println!("Delete sync:, id: {}", id);
+
     let mut sync_entries: std::sync::MutexGuard<'_, HashMap<i64, SyncData>> = database.sync_entries.lock().unwrap();
     
     if (*sync_entries).contains_key(&id) {
@@ -56,11 +61,16 @@ fn delete_sync(id: i64, database: tauri::State<Database>) -> bool {
 }
 
 #[tauri::command]
-fn replace_sync(sync_data: SyncData, id: i64, database: tauri::State<Database>) -> bool {
+fn replace_sync(mut sync_data: SyncData, id: i64, database: tauri::State<Database>) -> bool {
+    println!("Replace sync: {:?}, id: {}", sync_data, id);
+    
     let mut sync_entries: std::sync::MutexGuard<'_, HashMap<i64, SyncData>> = database.sync_entries.lock().unwrap();
     
     if (*sync_entries).contains_key(&id) {
+        let old_enabled = (*sync_entries).get(&id).unwrap().enabled;
         (*sync_entries).remove(&id);
+
+        sync_data.enabled = old_enabled;
         (*sync_entries).insert(id, sync_data);
         return true;
     }
@@ -69,8 +79,30 @@ fn replace_sync(sync_data: SyncData, id: i64, database: tauri::State<Database>) 
 }
 
 #[tauri::command]
-fn switch_sync(id: i64) -> bool {
-    return  false;
+fn get_sync(id: i64, database: tauri::State<Database>) -> Option<SyncData> {
+    let sync_entries: std::sync::MutexGuard<'_, HashMap<i64, SyncData>> = database.sync_entries.lock().unwrap();
+
+    match (*sync_entries).get(&id) {
+        Some(sync) => { 
+            return Some(sync.clone());
+         },
+        None => { return None; }
+    }
+}
+
+#[tauri::command]
+fn switch_sync(id: i64, database: tauri::State<Database>) -> Option<bool> {
+    println!("Switch sync: id: {}", id);
+    
+    let mut sync_entries: std::sync::MutexGuard<'_, HashMap<i64, SyncData>> = database.sync_entries.lock().unwrap();
+
+    match (*sync_entries).get_mut(&id) {
+        Some(sync) => { 
+            sync.enabled = !(sync.enabled);
+            return Some(sync.enabled);
+         },
+        None => { return None; }
+    }
 }
 
 #[tauri::command]
@@ -92,6 +124,8 @@ fn validate_paths(path_from: &str, path_to: &str) -> Option<u32> {
         code |= 1 << 3;
     }
 
+    //Add a warning if a sync with the same paths exists
+
     if code == 0 {
         return None;
     }
@@ -111,9 +145,9 @@ fn get_next_id(database: tauri::State<Database>) -> i64 {
 }
 
 #[tauri::command]
-fn save_edited_id(edited_id: i64, database: tauri::State<Database>) {
+fn save_edited_id(id: i64, database: tauri::State<Database>) {
     let mut save_edited_id = database.edited_id.lock().unwrap();
-    (*save_edited_id) = Some(edited_id);
+    (*save_edited_id) = Some(id);
 
     println!("Edited ID saved: {}", (*save_edited_id).unwrap_or(-1));
 }
@@ -146,7 +180,7 @@ fn main() {
     tauri::Builder::default()
         .manage(Database{ sync_entries: Mutex::new(HashMap::new()), next_id: Mutex::new(0), edited_id: Mutex::new(None) })
         .invoke_handler(tauri::generate_handler![
-            add_sync, delete_sync, replace_sync, switch_sync,
+            add_sync, delete_sync, replace_sync, get_sync, switch_sync,
             validate_paths, get_next_id, save_edited_id, reset_edit,
             is_edited, load_data_from_db])
         .run(tauri::generate_context!())
