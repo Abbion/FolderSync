@@ -278,7 +278,6 @@ async function enableSync(id) {
   console.log("Enable sync");
 
   const newStatePromise = switchSync(id);
-
   const syncEntry = document.getElementById("sync-entry-" + id);
 
   if (syncEntry){

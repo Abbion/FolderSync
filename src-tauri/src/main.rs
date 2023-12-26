@@ -1,9 +1,13 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::rc::Rc;
+use std::sync::{Mutex, Arc};
 use std::path::Path;
+use std::thread;
+use std::time::Duration;
 
 use serde::Serialize;
 
@@ -30,7 +34,7 @@ struct Database {
 }
 
 #[tauri::command]
-fn add_sync(sync_data: SyncData, id: i64, database: tauri::State<Database>) -> bool {
+fn add_sync(sync_data: SyncData, id: i64, database: tauri::State<Arc<Database>>) -> bool {
     println!("Add new sync: {:?}, id: {}", sync_data, id);
 
     let mut sync_entries = database.sync_entries.lock().unwrap();
@@ -47,7 +51,7 @@ fn add_sync(sync_data: SyncData, id: i64, database: tauri::State<Database>) -> b
 }
 
 #[tauri::command]
-fn delete_sync(id: i64, database: tauri::State<Database>) -> bool {
+fn delete_sync(id: i64, database: tauri::State<Arc<Database>>) -> bool {
     println!("Delete sync:, id: {}", id);
 
     let mut sync_entries: std::sync::MutexGuard<'_, HashMap<i64, SyncData>> = database.sync_entries.lock().unwrap();
@@ -61,7 +65,7 @@ fn delete_sync(id: i64, database: tauri::State<Database>) -> bool {
 }
 
 #[tauri::command]
-fn replace_sync(mut sync_data: SyncData, id: i64, database: tauri::State<Database>) -> bool {
+fn replace_sync(mut sync_data: SyncData, id: i64, database: tauri::State<Arc<Database>>) -> bool {
     println!("Replace sync: {:?}, id: {}", sync_data, id);
     
     let mut sync_entries: std::sync::MutexGuard<'_, HashMap<i64, SyncData>> = database.sync_entries.lock().unwrap();
@@ -79,7 +83,7 @@ fn replace_sync(mut sync_data: SyncData, id: i64, database: tauri::State<Databas
 }
 
 #[tauri::command]
-fn get_sync(id: i64, database: tauri::State<Database>) -> Option<SyncData> {
+fn get_sync(id: i64, database: tauri::State<Arc<Database>>) -> Option<SyncData> {
     let sync_entries: std::sync::MutexGuard<'_, HashMap<i64, SyncData>> = database.sync_entries.lock().unwrap();
 
     match (*sync_entries).get(&id) {
@@ -91,10 +95,10 @@ fn get_sync(id: i64, database: tauri::State<Database>) -> Option<SyncData> {
 }
 
 #[tauri::command]
-fn switch_sync(id: i64, database: tauri::State<Database>) -> Option<bool> {
+fn switch_sync(id: i64, database: tauri::State<Arc<Database>>) -> Option<bool> {
     println!("Switch sync: id: {}", id);
     
-    let mut sync_entries: std::sync::MutexGuard<'_, HashMap<i64, SyncData>> = database.sync_entries.lock().unwrap();
+    let mut sync_entries = database.sync_entries.lock().unwrap();
 
     match (*sync_entries).get_mut(&id) {
         Some(sync) => { 
@@ -134,7 +138,7 @@ fn validate_paths(path_from: &str, path_to: &str) -> Option<u32> {
 }
 
 #[tauri::command]
-fn get_next_id(database: tauri::State<Database>) -> i64 {
+fn get_next_id(database: tauri::State<Arc<Database>>) -> i64 {
     let mut next_id = database.next_id.lock().unwrap();
 
     let current_id = *next_id;
@@ -145,7 +149,7 @@ fn get_next_id(database: tauri::State<Database>) -> i64 {
 }
 
 #[tauri::command]
-fn save_edited_id(id: i64, database: tauri::State<Database>) {
+fn save_edited_id(id: i64, database: tauri::State<Arc<Database>>) {
     let mut save_edited_id = database.edited_id.lock().unwrap();
     (*save_edited_id) = Some(id);
 
@@ -153,7 +157,7 @@ fn save_edited_id(id: i64, database: tauri::State<Database>) {
 }
 
 #[tauri::command]
-fn reset_edit(database: tauri::State<Database>) {
+fn reset_edit(database: tauri::State<Arc<Database>>) {
     let mut save_edited_id = database.edited_id.lock().unwrap();
     (*save_edited_id) = None;
 
@@ -161,28 +165,47 @@ fn reset_edit(database: tauri::State<Database>) {
 }
 
 #[tauri::command]
-fn is_edited(database: tauri::State<Database>) -> Option<i64> {
+fn is_edited(database: tauri::State<Arc<Database>>) -> Option<i64> {
     let save_edited_id = database.edited_id.lock().unwrap();
 
     *save_edited_id
 }
 
-#[tauri::command]
-fn load_data_from_db() {
+fn load_data_from_db() -> Arc<Database> {
+    let local_data_base = Database{
+                                                sync_entries: Mutex::new(HashMap::new()),
+                                                next_id: Mutex::new(0),
+                                                edited_id: Mutex::new(None) 
+                                            };
 
+    Arc::new(local_data_base)
 }
 
-fn sync_folders() {
-    
+fn sync_folders(database: Arc<Database>) {
+    for i in 1..10 {
+        println!("hi number {} from the spawned thread!", i);
+        thread::sleep(Duration::from_secs(1));
+    }
 }
 
 fn main() {
+    let local_data_base = load_data_from_db();
+
+    let local_db_update = Arc::clone(&local_data_base);
+    let local_db_tauri = Arc::clone(&local_data_base);
+
+    let sync_update_handle = thread::spawn(move ||{
+        sync_folders(local_db_update);
+    });
+
     tauri::Builder::default()
-        .manage(Database{ sync_entries: Mutex::new(HashMap::new()), next_id: Mutex::new(0), edited_id: Mutex::new(None) })
+        .manage(local_db_tauri)
         .invoke_handler(tauri::generate_handler![
             add_sync, delete_sync, replace_sync, get_sync, switch_sync,
             validate_paths, get_next_id, save_edited_id, reset_edit,
-            is_edited, load_data_from_db])
+            is_edited])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+
+    sync_update_handle.join().unwrap();
 }
