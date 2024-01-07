@@ -91,12 +91,13 @@ fn delete_sync(id: u64, database: tauri::State<Arc<Database>>) -> bool {
     
     if (*sync_entries).contains_key(&id) {
         (*sync_entries).remove(&id);
+
+        let connection = database.sql_connection.lock().unwrap();
+        let remove_sync_quary = format!("DELETE FROM sync WHERE id = {};", id);
+        connection.execute(remove_sync_quary).unwrap();
+
         return true;
     }
-
-    let connection = database.sql_connection.lock().unwrap();
-    let remove_sync_quary = format!("DELETE FROM sync WHERE id = {};", id);
-    connection.execute(remove_sync_quary).unwrap();
 
     return false;
 }
