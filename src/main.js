@@ -1,14 +1,13 @@
-//let greetInputEl;
-//let greetMsgEl;
-
 const { invoke } = window.__TAURI__.tauri;
 const { open } = window.__TAURI__.dialog;
+const { emit, listen } = window.__TAURI__.event
 
 //Rust handlers
 async function addSync(syncData, id) {
   return await invoke("add_sync", { syncData: { from_path: syncData.paths[0],
                                                 to_path: syncData.paths[1],
                                                 interval_value: syncData.intervalValue,
+                                                interval_time: 0,
                                                 interval_type: syncData.intervalType.toUpperCase(),
                                                 enabled: true
                                               },
@@ -23,6 +22,7 @@ async function replaceSync(syncData, id) {
   return await invoke("replace_sync", { syncData: { from_path: syncData.paths[0],
                                                     to_path: syncData.paths[1],
                                                     interval_value: syncData.intervalValue,
+                                                    interval_time: 0,
                                                     interval_type: syncData.intervalType.toUpperCase(),
                                                     enabled: true //This will be overwritten by the replaced entry
                                               },
@@ -55,6 +55,10 @@ async function resetEdit() {
 
 async function isEdited() {
   return await invoke("is_edited");
+}
+
+async function getLoadedSync() {
+  return await invoke("get_loaded_sync");
 }
 
 //Constants
@@ -194,24 +198,15 @@ function getData() {
   return {};
 }
 
-async function addRecord(syncData, id){
+async function renderRecord(syncData, id){
   console.log("Add record: ", syncData);
-  
-  const add_state = await addSync(syncData, id);
-  
-  console.log("add state: " + add_state);
 
-  //Create hmtl code
-  if (add_state) {
-    const entryHtml = createNewSyncEntryHtml(syncData.paths, id);
-    let syncTable = document.getElementById("sync-table");
+  const entryHtml = createNewSyncEntryHtml(syncData.paths, id);
 
-    if (syncTable) {
-      syncTable.innerHTML += entryHtml;
-    }
-  }
-  else {
-    //Display adding error
+  let syncTable = document.getElementById("sync-table");
+
+  if (syncTable) {
+    syncTable.innerHTML += entryHtml;
   }
 }
 
@@ -234,7 +229,14 @@ async function saveRecord() {
 
     if (id == null) {
       id = await getNextID();
-      addRecord(data, id);
+      const add_state = await addSync(syncData, id);
+
+      if (add_state) {
+        renderRecord(data, id);
+      }
+      else {
+        //Display adding error
+      }
     }
     else {
       replaceSync(data, id);
@@ -274,19 +276,23 @@ async function editRecord(id) {
   setData(syncData);
 }
 
-async function enableSync(id) {
-  console.log("Enable sync");
-
-  const newStatePromise = switchSync(id);
+function updateSyncStateColor(state, id) {
   const syncEntry = document.getElementById("sync-entry-" + id);
 
   if (syncEntry){
     let state = syncEntry.getElementsByClassName("state")[0];
     
     if (state) {
-      state.style.backgroundColor = (await newStatePromise ? syncEnableColor : syncDisabledColor);
+      state.style.backgroundColor = (state ? syncEnableColor : syncDisabledColor);
     }
   }
+}
+
+async function enableSync(id) {
+  console.log("Enable sync");
+
+  const newStatePromise = await switchSync(id);
+  updateSyncStateColor(newStatePromise, id);
 }
 
 async function openFolder(htmlElement) {
@@ -333,18 +339,19 @@ function checkIfValueIsEmpty(input){
   }
 }
 
-/*
-async function greet() {
-  // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
-  greetMsgEl.textContent = await invoke("greet", { name: greetInputEl.value });
-}
+window.addEventListener('DOMContentLoaded', async () => {
+  let syncMap = await getLoadedSync();
 
-window.addEventListener("DOMContentLoaded", () => {
-  greetInputEl = document.querySelector("#greet-input");
-  greetMsgEl = document.querySelector("#greet-msg");
-  document.querySelector("#greet-form").addEventListener("submit", (e) => {
-    e.preventDefault();
-    greet();
-  });
+  for (const id in syncMap) {
+    const item = syncMap[id];
+
+    let syncToRender = {
+      paths: [item.from_path, item.to_path],
+      intervalValue: item.interval_value,
+      intervalType: item.interval_type
+    }
+
+    renderRecord(syncToRender, id);
+    updateSyncStateColor(item.enabled , id);
+  };
 });
-*/
