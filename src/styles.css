@@ -67,7 +67,7 @@ p2{
   margin-left: 0.75em;
   padding-bottom: 0.4em;
   display: grid;
-  grid-template-columns: 7% 40% 38% 5.75% 8%;
+  grid-template-columns: 7% 40% 39.25% 5.75% 8%;
 }
 
 .table-header > p1{
@@ -76,7 +76,9 @@ p2{
 }
 
 .sync-table {
+  width: 100%;
   max-height: 420px;
+
   overflow-y: scroll;
   padding-right: 10px;
 }
@@ -294,4 +296,40 @@ p2{
 
   width: 45%;
   height: 3em;
+}
+
+.error-box {
+  width: 40%;
+  max-height: 5em;
+
+  padding: 1em;
+
+  background-color: #f2f2f2;
+  box-shadow: 0px 0px 15px #262626;
+
+  position: fixed;
+  left: 50%;
+  transform: translate(-50%, 0);
+  top: -5em;
+}
+
+.popupErrorBox {
+  animation: slideDown 0.5s forwards, slideUp 0.5s 3.0s forwards;
+}
+
+@keyframes slideDown {
+  to {
+      top: 1em;
+  }
+}
+
+@keyframes slideUp {
+  to {
+      top: -5em;
+  }
+}
+
+.error-box-title {
+  color: #FF293B;
+  font-weight: bold;
 }

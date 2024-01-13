@@ -3,7 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="styles.css" />
-    <script src="htmlTemplates.js"></script>
+    <script src="Core.js"></script>
+    <script src="RustHandlers"></script>
+    <script src="HtmlTemplates.js"></script>
+    <script src="ErrorLog.js"></script>
+    <script src="Renderers.js"></script>
+    <script src="ValueValidators.js"></script>
     <script src="main.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Folder sync</title>
@@ -39,6 +44,7 @@
           Version 0.1
         </p1>
       </div>
+
       <div class="edit-box" id="edit-box">
         <div class="edit-box-title">
           <p2>
@@ -87,6 +93,16 @@
           <button type="button" onclick="closeEditBox()">Cancel</button>
         </div>
       </div>
+
+      <div id="error-box" class="error-box">
+        <div class="error-box-title">
+          Error!
+        </div>
+        <div id="error-box-message">
+          Empty error message
+        </div>
+      </div>
+
     </div>
   </body>
 </html>

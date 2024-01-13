@@ -1,117 +1,8 @@
-const { invoke } = window.__TAURI__.tauri;
 const { open } = window.__TAURI__.dialog;
-const { emit, listen } = window.__TAURI__.event
-
-//Rust handlers
-async function addSync(syncData, id) {
-  return await invoke("add_sync", { syncData: { from_path: syncData.paths[0],
-                                                to_path: syncData.paths[1],
-                                                interval_value: syncData.intervalValue,
-                                                interval_time: 0,
-                                                interval_type: syncData.intervalType.toUpperCase(),
-                                                enabled: true
-                                              },
-                                    id: id });
-}
-
-async function deleteSync(id) {
-  return await invoke("delete_sync", { id: id });
-}
-
-async function replaceSync(syncData, id) {
-  return await invoke("replace_sync", { syncData: { from_path: syncData.paths[0],
-                                                    to_path: syncData.paths[1],
-                                                    interval_value: syncData.intervalValue,
-                                                    interval_time: 0,
-                                                    interval_type: syncData.intervalType.toUpperCase(),
-                                                    enabled: true //This will be overwritten by the replaced entry
-                                              },
-                                        id: id });
-}
-
-async function getSync(id) {
-  return await invoke("get_sync", { id: id });
-}
-
-async function switchSync(id) {
-  return await invoke("switch_sync", { id: id });
-}
-
-async function validatePaths(pathFrom, pathTo) {
-  return await invoke("validate_paths", { pathFrom: pathFrom, pathTo: pathTo });
-}
-
-async function getNextID() {
-  return await invoke("get_next_id");
-}
-
-async function saveEditedID(id) {
-  await invoke("save_edited_id", { id: id });
-}
-
-async function resetEdit() {
-  await invoke("reset_edit");
-}
-
-async function isEdited() {
-  return await invoke("is_edited");
-}
-
-async function getLoadedSync() {
-  return await invoke("get_loaded_sync");
-}
-
-//Constants
-const defaultPath = "Select folder";
-const defaultIntervalValue = 10;
-const syncEnableColor = "#05A66B"
-const syncDisabledColor = "#262626"
-
-//Main code
-function closeEditBox(){
-  let editBox = document.getElementById('edit-box');
-
-  if(editBox){
-    let filePaths = editBox.getElementsByTagName("p1");
-    for (let path of filePaths){
-      path.innerHTML = defaultPath;
-      path.title = "";
-    }
-    console.log(filePaths);
-
-    editBox.style.visibility = "hidden";
-  }
-  else
-    console.error("Path element not found: " + editBox);
-
-  let intervalValue = document.getElementById('interval-value');
-
-  if (intervalValue){
-    intervalValue.value = defaultIntervalValue;
-  }
-  else
-    console.error("interval value not found");
-}
-
-async function addSyncNewPressed() {
-  await resetEdit();
-  openEditBox();
-}
-
-function openEditBox(){
-  let editBox = document.getElementById('edit-box');
-
-  if(editBox)
-    editBox.style.visibility = "visible";
-  else
-    console.error("Element: " + editBox);
-}
 
 function setData(data) {
   let editBox = document.getElementById('edit-box');
   let paths = [];
-  let intervalValue;
-  let intervalType;
 
   if (editBox) {
     let filePaths = editBox.getElementsByTagName("p1");
@@ -126,14 +17,18 @@ function setData(data) {
       itr++;
     }
   }
+  else {
+    console.error("Html element not found: " + editBox);
+    return {};
+  }
 
   let intervalInput = document.getElementById('interval-value');
 
   if (intervalInput) {
     intervalInput.value = data.interval_value;
   }
-  else{
-    console.error("Element: " + intervalInput);
+  else {
+    console.error("Html element not found: " + intervalInput);
     return {};
   }
 
@@ -142,8 +37,8 @@ function setData(data) {
   if (intervalSelector) {
     intervalSelector.value = data.interval_type.toLowerCase();
   }
-  else{
-    console.error("Element: " + intervalInput);
+  else {
+    console.error("Html element not found: " + intervalInput);
     return {};
   }
 }
@@ -154,7 +49,7 @@ function getData() {
   let intervalValue;
   let intervalType;
 
-  if(editBox){
+  if (editBox) {
     let filePaths = editBox.getElementsByTagName("p1");
     for (let path of filePaths){
       if(path.innerHTML.length === 0 || path.innerHTML.trim() === defaultPath){
@@ -168,20 +63,20 @@ function getData() {
     
     let intervalInput = document.getElementById('interval-value');
 
-    if(intervalInput){
+    if (intervalInput) {
       intervalValue = parseInt(intervalInput.value);
     }
-    else{
+    else {
       console.error("Element: " + intervalInput);
       return {};
     }
 
     let intervalSelector = document.getElementById('interval-type');
 
-    if(intervalSelector){
+    if (intervalSelector) {
       intervalType = intervalSelector.value;
     }
-    else{
+    else {
       console.error("Element: " + intervalInput);
       return {};
     }
@@ -192,32 +87,22 @@ function getData() {
       intervalType: intervalType
     };
   }
-  else
-    console.error("Element: " + editBox);
-
-  return {};
-}
-
-async function renderRecord(syncData, id){
-  console.log("Add record: ", syncData);
-
-  const entryHtml = createNewSyncEntryHtml(syncData.paths, id);
-
-  let syncTable = document.getElementById("sync-table");
-
-  if (syncTable) {
-    syncTable.innerHTML += entryHtml;
+  else {
+    console.error("Html element not found: " + editBox);
+    return {};
   }
 }
 
+async function addSyncNewPressed() {
+  await resetEdit();
+  openEditBox();
+}
+
 async function saveRecord() {
-  console.log("Save record");
   const data = getData();
 
-  console.log(data);
-
-  if (Object.keys(data).length != 3){
-    console.error("Incorrect amount of keys");
+  if (Object.keys(data).length != 3) {
+    showError("Incorrect amount of keys")
     return;
   }
 
@@ -229,13 +114,13 @@ async function saveRecord() {
 
     if (id == null) {
       id = await getNextID();
-      const add_state = await addSync(syncData, id);
+      const add_state = await addSync(data, id);
 
       if (add_state) {
         renderRecord(data, id);
       }
       else {
-        //Display adding error
+        showError("Adding new record failed!");
       }
     }
     else {
@@ -243,15 +128,21 @@ async function saveRecord() {
     }
   }
   else{
-    console.error("Paths are not valid code:", valid);
+    showError("Paths are not valid code:", valid);
   }
 
   closeEditBox();
 }
 
-async function deleteRecord(syncID) {
-  console.log("Delete record");
+async function editRecord(id) {
+  await saveEditedID(id);
 
+  let syncData = getSync(id);
+  openEditBox();
+  setData(await syncData);
+}
+
+async function deleteRecord(syncID) {
   const result = await deleteSync(syncID);
 
   if (result) {
@@ -259,45 +150,22 @@ async function deleteRecord(syncID) {
 
     if (syncEntry){
       syncEntry.remove();
+    } 
+    else {
+      console.error("Html element not found: " + syncEntry);
     }
   }
-}
-
-async function editRecord(id) {
-  console.log("Edit record");
-
-  await saveEditedID(id);
-
-  let syncData = await getSync(id);
-  console.log(syncData);
-
-  openEditBox();
-
-  setData(syncData);
-}
-
-function updateSyncStateColor(state, id) {
-  const syncEntry = document.getElementById("sync-entry-" + id);
-
-  if (syncEntry){
-    let state = syncEntry.getElementsByClassName("state")[0];
-    
-    if (state) {
-      state.style.backgroundColor = (state ? syncEnableColor : syncDisabledColor);
-    }
+  else {
+    showError("Deleting record failed!");
   }
 }
 
 async function enableSync(id) {
-  console.log("Enable sync");
-
   const newStatePromise = await switchSync(id);
   updateSyncStateColor(newStatePromise, id);
 }
 
 async function openFolder(htmlElement) {
-  console.log("Open folder");
-
   try{
     const selectedPath = await open({
       multiple: false,
@@ -322,20 +190,6 @@ async function openFolder(htmlElement) {
   }
   catch (err){
     console.error("Open folder error: " + err);
-  }
-}
-
-function validateIntervalValue(input) {
-  // Remove non-numeric characters and leading zeros
-  let sanitizedValue = input.value.replace(/[^0-9]/g, '').replace(/^0+/, '');
-  
-  sanitizedValue = sanitizedValue.slice(0, 3);
-  input.value = sanitizedValue;
-}
-
-function checkIfValueIsEmpty(input){
-  if (input.value.length === 0){
-    input.value = "1";
   }
 }
 

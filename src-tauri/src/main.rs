@@ -4,12 +4,11 @@
 use std::collections::HashMap;
 use std::sync::{Mutex, Arc};
 use std::path::Path;
-use std::{thread, string};
-use std::time::{Duration, SystemTimeError, SystemTime};
+use std::thread;
+use std::time::SystemTime;
 
 use serde::Serialize;
 use sqlite::State;
-use tauri::Manager;
 
 #[derive(serde::Deserialize, Debug, Clone, Serialize)]
 enum IntervalType {
