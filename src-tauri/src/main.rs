@@ -117,15 +117,15 @@ fn replace_sync(mut sync_data: SyncData, id: u64, database: tauri::State<Arc<Dat
         let connection = database.sql_connection.lock().unwrap();
         let update_sync_quary = format!("
                     UPDATE sync SET
-                    from_path = {},
-                    to_path = {},
+                    from_path = '{}',
+                    to_path = '{}',
                     interval_value = {},
                     interval_type = {},
                     enabled = {}
                     WHERE id = {};",
                     sync_data.from_path, sync_data.to_path, sync_data.interval_value, sync_data.interval_type as u8, sync_data.enabled,  id
                 );
-
+        
         connection.execute(update_sync_quary).unwrap();
 
         return true;
@@ -342,7 +342,7 @@ fn sync_folders(database: Arc<Database>, should_close: Arc<Mutex<bool>>) {
             }
         }
 
-        for (id, entry) in database.sync_entries.lock().unwrap().iter_mut() {
+        for (_, entry) in database.sync_entries.lock().unwrap().iter_mut() {
             if entry.enabled == false {
                 continue;
             }
