@@ -1,254 +1,19 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::collections::HashMap;
-use std::fs::{FileType, copy};
 use std::sync::{Mutex, Arc};
-use std::path::Path;
 use std::{thread, fs};
 use std::time::SystemTime;
 
-use serde::Serialize;
 use sqlite::State;
-use tauri::api::file;
 
-#[derive(serde::Deserialize, Debug, Clone, Serialize)]
-enum IntervalType {
-    SECOND = 0,
-    MINUTE = 1,
-    HOUR = 2
-}
+mod vec_helper;
+mod sys_helper;
+mod structs;
+mod tauri_commands;
 
-trait ToIntervalType {
-    fn to_interval_type(self) -> IntervalType;
-}
-
-impl ToIntervalType for i64 {
-    fn to_interval_type(self) -> IntervalType {
-        match self {
-            0 => IntervalType::SECOND,
-            1 => IntervalType::MINUTE,
-            2 => IntervalType::HOUR,
-            _ => IntervalType::SECOND,
-        }
-    }
-}
-#[derive(serde::Deserialize, Debug, Clone, Serialize)]
-struct SyncData {
-    from_path: String,
-    to_path: String,
-    interval_value: u64,
-    interval_time: u64,
-    interval_type: IntervalType,
-    enabled: bool
-}
-
-struct Database {
-    sync_entries: Mutex<HashMap<u64, SyncData>>,
-    next_id: Mutex<u64>,
-    edited_id: Mutex<Option<u64>>,
-    sql_connection: Mutex<sqlite::Connection>
-}
-
-impl Database {
-    fn new() -> Database {
-        Database{
-            sync_entries: Mutex::new(HashMap::new()),
-            next_id: Mutex::new(0),
-            edited_id: Mutex::new(None),
-            sql_connection : Mutex::new(sqlite::open("sync.db").unwrap())
-        }
-    }
-}
-
-#[tauri::command]
-fn add_sync(sync_data: SyncData, id: u64, database: tauri::State<Arc<Database>>) -> bool {
-    println!("Add new sync: {:?}, id: {}", sync_data, id);
-
-    let mut sync_entries = database.sync_entries.lock().unwrap();
-    
-    if (*sync_entries).contains_key(&id) {
-        return false;
-    }
-
-    (*sync_entries).insert(id, sync_data.clone());
-
-    let connection = database.sql_connection.lock().unwrap();
-    let insert_sync_quary = format!("
-                INSERT INTO sync (id, from_path, to_path, interval_value, interval_type, enabled) 
-                VALUES ({}, '{}', '{}', {}, {}, {});
-                ", id, sync_data.from_path, sync_data.to_path, sync_data.interval_value, sync_data.interval_type as u8, sync_data.enabled);
-
-    connection.execute(insert_sync_quary).unwrap();
-
-    return true;
-}
-
-#[tauri::command]
-fn delete_sync(id: u64, database: tauri::State<Arc<Database>>) -> bool {
-    println!("Delete sync:, id: {}", id);
-
-    let mut sync_entries = database.sync_entries.lock().unwrap();
-    
-    if (*sync_entries).contains_key(&id) {
-        (*sync_entries).remove(&id);
-
-        let connection = database.sql_connection.lock().unwrap();
-        let remove_sync_quary = format!("DELETE FROM sync WHERE id = {};", id);
-        connection.execute(remove_sync_quary).unwrap();
-
-        return true;
-    }
-
-    return false;
-}
-
-#[tauri::command]
-fn replace_sync(mut sync_data: SyncData, id: u64, database: tauri::State<Arc<Database>>) -> bool {
-    println!("Replace sync: {:?}, id: {}", sync_data, id);
-    
-    let mut sync_entries = database.sync_entries.lock().unwrap();
-    
-    if (*sync_entries).contains_key(&id) {
-        let old_enabled = (*sync_entries).get(&id).unwrap().enabled;
-        (*sync_entries).remove(&id);
-
-        sync_data.enabled = old_enabled;
-        (*sync_entries).insert(id, sync_data.clone());
-        
-        let connection = database.sql_connection.lock().unwrap();
-        let update_sync_quary = format!("
-                    UPDATE sync SET
-                    from_path = '{}',
-                    to_path = '{}',
-                    interval_value = {},
-                    interval_type = {},
-                    enabled = {}
-                    WHERE id = {};",
-                    sync_data.from_path, sync_data.to_path, sync_data.interval_value, sync_data.interval_type as u8, sync_data.enabled,  id
-                );
-        
-        connection.execute(update_sync_quary).unwrap();
-
-        return true;
-    }
-
-    return false;
-}
-
-#[tauri::command]
-fn get_sync(id: u64, database: tauri::State<Arc<Database>>) -> Option<SyncData> {
-    let sync_entries = database.sync_entries.lock().unwrap();
-
-    match (*sync_entries).get(&id) {
-        Some(sync) => { 
-            return Some(sync.clone());
-         },
-        None => { return None; }
-    }
-}
-
-#[tauri::command]
-fn switch_sync(id: u64, database: tauri::State<Arc<Database>>) -> Option<bool> {
-    println!("Switch sync: id: {}", id);
-    
-    let mut sync_entries = database.sync_entries.lock().unwrap();
-
-    match (*sync_entries).get_mut(&id) {
-        Some(sync) => { 
-            sync.enabled = !(sync.enabled);
-
-            let connection = database.sql_connection.lock().unwrap();
-            let update_sync_quary = format!("
-                        UPDATE sync SET
-                        enabled = {}
-                        WHERE id = {};",
-                        sync.enabled,  id
-                    );
-    
-            connection.execute(update_sync_quary).unwrap();
-
-            return Some(sync.enabled);
-         },
-        None => { return None; }
-    }
-}
-
-#[tauri::command]
-fn validate_paths(path_from: &str, path_to: &str) -> Option<u32> {
-    println!("Validating paths: {} - {}", path_from, path_to);
-
-    let from_dir_valid = Path::new(path_from).is_dir();
-    let to_dir_valid = Path::new(path_to).is_dir();
-    
-    let mut code = 0;
-
-    if !from_dir_valid {
-        code |= 1 << 1;
-    }
-    if !to_dir_valid {
-        code |= 1 << 2;
-    }
-    if code == 0 && path_from == path_to {
-        code |= 1 << 3;
-    }
-
-    if code == 0 {
-        return None;
-    }
-
-    Some(code)
-}
-
-#[tauri::command]
-fn get_next_id(database: tauri::State<Arc<Database>>) -> u64 {
-    let mut next_id = database.next_id.lock().unwrap();
-
-    let current_id = *next_id;
-    *next_id = *next_id + 1;
-
-    let connection = database.sql_connection.lock().unwrap();
-    let update_sync_quary = format!("
-                UPDATE id_generator SET
-                next_sync_id = {}
-                WHERE id = 0;",
-                (*next_id)
-            );
-
-    connection.execute(update_sync_quary).unwrap();
-
-    println!("Returning next id: {}", current_id);
-    return current_id;
-}
-
-#[tauri::command]
-fn save_edited_id(id: u64, database: tauri::State<Arc<Database>>) {
-    let mut save_edited_id = database.edited_id.lock().unwrap();
-    (*save_edited_id) = Some(id);
-
-    println!("Edited ID saved: {:?}", (*save_edited_id));
-}
-
-#[tauri::command]
-fn reset_edit(database: tauri::State<Arc<Database>>) {
-    let mut save_edited_id = database.edited_id.lock().unwrap();
-    (*save_edited_id) = None;
-
-    println!("Edited ID reset: {}", (*save_edited_id) == None);
-}
-
-#[tauri::command]
-fn is_edited(database: tauri::State<Arc<Database>>) -> Option<u64> {
-    let save_edited_id = database.edited_id.lock().unwrap();
-
-    *save_edited_id
-}
-
-#[tauri::command]
-fn get_loaded_sync(database: tauri::State<Arc<Database>>) -> HashMap<u64, SyncData> {
-    let sync_entries = database.sync_entries.lock().unwrap();
-    (*sync_entries).clone()
-}
+use tauri_commands::{*};
+use structs::{*};
 
 fn load_data_from_db() -> Arc<Database> {
     let local_data_base = Database::new();
@@ -356,18 +121,18 @@ fn sync_folders(database: Arc<Database>, should_close: Arc<Mutex<bool>>) {
                 let from_path = entry.from_path.clone();
                 let to_path = entry.to_path.clone();
                 
-                let from_files = get_file_names_from_folder(&from_path);
-                let to_files = get_file_names_from_folder(&to_path);   
+                let from_files = sys_helper::get_file_names_from_folder(&from_path);
+                let to_files = sys_helper::get_file_names_from_folder(&to_path);   
 
                 //Update shared files
-                let shared_files_list = find_intersection(&from_files, &to_files);
+                let shared_files_list = vec_helper::find_intersection(&from_files, &to_files);
 
                 for shared_file in shared_files_list {
                     let source_path = format!("{}\\{}", from_path, shared_file);
                     let destination_path = format!("{}\\{}", to_path, shared_file);
 
-                    let source_mod_date = get_file_modification_date(&source_path);
-                    let destination_mod_date = get_file_modification_date(&destination_path);
+                    let source_mod_date = sys_helper::get_file_modification_date(&source_path);
+                    let destination_mod_date = sys_helper::get_file_modification_date(&destination_path);
 
                     if let Some(s_date) = source_mod_date {
                         if let Some(d_date) = destination_mod_date {
@@ -394,7 +159,7 @@ fn sync_folders(database: Arc<Database>, should_close: Arc<Mutex<bool>>) {
                 }
 
                 //Copy missing files
-                let missing_files_list = find_difference(&from_files, &to_files);
+                let missing_files_list = vec_helper::find_difference(&from_files, &to_files);
 
                 for missing_file in missing_files_list {
                     let source_path = format!("{}\\{}", from_path, missing_file);
@@ -412,75 +177,6 @@ fn sync_folders(database: Arc<Database>, should_close: Arc<Mutex<bool>>) {
             }
         }
     }
-}
-
-fn get_file_names_from_folder(path: & String) -> Vec<String> {
-    let mut file_list = Vec::new();
-
-    let itr = fs::read_dir(path);
-
-    match itr {
-        Ok(read_dir) => {
-            for entry in read_dir {
-                match entry {
-                    Ok(dir_entry) => {
-                        let file_path = dir_entry.path();
-                        if file_path.is_file() {
-                            if let Some(name) = file_path.file_name().and_then(|s| s.to_str()) {
-                                file_list.push(name.to_string());
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        println!("Error while reading folder entry: {}", e);
-                    }
-                }
-            }
-        }
-        Err(e) => {
-            println!("Error while reading folder files: {}", e);
-        }
-    }
-
-    return file_list
-}
-
-fn get_file_modification_date(file_path: &String) -> Option<SystemTime> {
-    let metadata = fs::metadata(file_path);
-
-    match metadata {
-        Ok(data) => {
-            match data.modified() {
-                Ok(modification_date) => {
-                    return Some(modification_date);
-                },
-                Err(e) => {
-                    println!("Error while reading file modification date: {}", e);
-                }
-            }
-        },
-        Err(e) => {
-            println!("Error while reading file metadata: {}", e);
-        }
-    }
-
-    None
-}
-
-fn find_difference<'a, T>(vector1: &'a [T], vector2: &'a [T]) -> Vec<&'a T>
-where
-    T: PartialEq,
-{
-    let difference: Vec<&'a T> = vector1.iter().filter(|&elem| !vector2.contains(elem)).collect();
-    difference
-}
-
-fn find_intersection<'a, T>(vector1: &'a [T], vector2: &'a [T]) -> Vec<&'a T>
-where
-    T: PartialEq,
-{
-    let intersection: Vec<&'a T> = vector1.iter().filter(|&elem| vector2.contains(elem)).collect();
-    intersection
 }
 
 fn convert_to_seconds(interval_type: IntervalType, value: u64) -> u64 {
