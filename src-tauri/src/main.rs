@@ -2,13 +2,15 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::collections::HashMap;
+use std::fs::{FileType, copy};
 use std::sync::{Mutex, Arc};
 use std::path::Path;
-use std::thread;
+use std::{thread, fs};
 use std::time::SystemTime;
 
 use serde::Serialize;
 use sqlite::State;
+use tauri::api::file;
 
 #[derive(serde::Deserialize, Debug, Clone, Serialize)]
 enum IntervalType {
@@ -191,8 +193,6 @@ fn validate_paths(path_from: &str, path_to: &str) -> Option<u32> {
         code |= 1 << 3;
     }
 
-    //Add a warning if a sync with the same paths exists
-
     if code == 0 {
         return None;
     }
@@ -355,11 +355,132 @@ fn sync_folders(database: Arc<Database>, should_close: Arc<Mutex<bool>>) {
 
                 let from_path = entry.from_path.clone();
                 let to_path = entry.to_path.clone();
+                
+                let from_files = get_file_names_from_folder(&from_path);
+                let to_files = get_file_names_from_folder(&to_path);   
 
-                println!("coppying {} to {}", from_path, to_path);
+                //Update shared files
+                let shared_files_list = find_intersection(&from_files, &to_files);
+
+                for shared_file in shared_files_list {
+                    let source_path = format!("{}\\{}", from_path, shared_file);
+                    let destination_path = format!("{}\\{}", to_path, shared_file);
+
+                    let source_mod_date = get_file_modification_date(&source_path);
+                    let destination_mod_date = get_file_modification_date(&destination_path);
+
+                    if let Some(s_date) = source_mod_date {
+                        if let Some(d_date) = destination_mod_date {
+                            let s_duration = s_date.elapsed().unwrap();
+                            let d_duration = d_date.elapsed().unwrap();
+
+                            if s_duration.as_millis() != d_duration.as_millis() {
+                                println!("Copying {} -> {}", source_path, destination_path);
+
+                                match fs::copy(source_path, destination_path) {
+                                    Ok(_) => {},
+                                    Err(e) => {
+                                        println!("Error while copying files: {}", e);
+                                    }
+                                }
+                            }
+
+                        } else {
+                          continue;  
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+
+                //Copy missing files
+                let missing_files_list = find_difference(&from_files, &to_files);
+
+                for missing_file in missing_files_list {
+                    let source_path = format!("{}\\{}", from_path, missing_file);
+                    let destination_path = format!("{}\\{}", to_path, missing_file);
+
+                    println!("Copying {} -> {}", source_path, destination_path);
+
+                    match fs::copy(source_path, destination_path) {
+                        Ok(_) => {},
+                        Err(e) => {
+                            println!("Error while copying files: {}", e);
+                        }
+                    }
+                }
             }
         }
     }
+}
+
+fn get_file_names_from_folder(path: & String) -> Vec<String> {
+    let mut file_list = Vec::new();
+
+    let itr = fs::read_dir(path);
+
+    match itr {
+        Ok(read_dir) => {
+            for entry in read_dir {
+                match entry {
+                    Ok(dir_entry) => {
+                        let file_path = dir_entry.path();
+                        if file_path.is_file() {
+                            if let Some(name) = file_path.file_name().and_then(|s| s.to_str()) {
+                                file_list.push(name.to_string());
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        println!("Error while reading folder entry: {}", e);
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            println!("Error while reading folder files: {}", e);
+        }
+    }
+
+    return file_list
+}
+
+fn get_file_modification_date(file_path: &String) -> Option<SystemTime> {
+    let metadata = fs::metadata(file_path);
+
+    match metadata {
+        Ok(data) => {
+            match data.modified() {
+                Ok(modification_date) => {
+                    return Some(modification_date);
+                },
+                Err(e) => {
+                    println!("Error while reading file modification date: {}", e);
+                }
+            }
+        },
+        Err(e) => {
+            println!("Error while reading file metadata: {}", e);
+        }
+    }
+
+    None
+}
+
+fn find_difference<'a, T>(vector1: &'a [T], vector2: &'a [T]) -> Vec<&'a T>
+where
+    T: PartialEq,
+{
+    let difference: Vec<&'a T> = vector1.iter().filter(|&elem| !vector2.contains(elem)).collect();
+    difference
+}
+
+fn find_intersection<'a, T>(vector1: &'a [T], vector2: &'a [T]) -> Vec<&'a T>
+where
+    T: PartialEq,
+{
+    let intersection: Vec<&'a T> = vector1.iter().filter(|&elem| vector2.contains(elem)).collect();
+    intersection
 }
 
 fn convert_to_seconds(interval_type: IntervalType, value: u64) -> u64 {
@@ -368,11 +489,6 @@ fn convert_to_seconds(interval_type: IntervalType, value: u64) -> u64 {
         IntervalType::MINUTE => { return value * 60; }
         IntervalType::HOUR => { return value * 60 * 60; }
     }
-}
-
-#[derive(Clone, Serialize)]
-struct Payload {
-    message: String
 }
 
 fn main() {
