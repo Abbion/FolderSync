@@ -298,7 +298,7 @@ p2{
   height: 3em;
 }
 
-.error-box {
+.info-box {
   width: 40%;
   max-height: 5em;
 
@@ -310,10 +310,10 @@ p2{
   position: fixed;
   left: 50%;
   transform: translate(-50%, 0);
-  top: -5em;
+  top: -8em;
 }
 
-.popupErrorBox {
+.popupInfoBox {
   animation: slideDown 0.5s forwards, slideUp 0.5s 3.0s forwards;
 }
 
@@ -325,11 +325,16 @@ p2{
 
 @keyframes slideUp {
   to {
-      top: -5em;
+      top: -8em;
   }
 }
 
 .error-box-title {
   color: #FF293B;
+  font-weight: bold;
+}
+
+.warning-box-title {
+  color: #F2BC18;
   font-weight: bold;
 }

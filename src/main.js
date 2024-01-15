@@ -126,12 +126,16 @@ async function saveRecord() {
     else {
       replaceSync(data, id);
     }
+
+    closeEditBox();
   }
   else{
-    showError("Paths are not valid code:", valid);
-  }
+    const errorMessages = pathValidationErrorIdToText(valid);
 
-  closeEditBox();
+    for (const errorMessage of errorMessages) {
+      showError(errorMessage);
+    }
+  }
 }
 
 async function editRecord(id) {

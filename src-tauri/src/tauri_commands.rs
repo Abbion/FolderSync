@@ -119,14 +119,15 @@ pub fn switch_sync(id: u64, database: tauri::State<Arc<Database>>) -> Option<boo
 }
 
 #[tauri::command]
-pub fn validate_paths(path_from: &str, path_to: &str) -> Option<u32> {
+pub fn validate_paths(database: tauri::State<Arc<Database>>, path_from: &str, path_to: &str) -> Option<u32> {
     println!("Validating paths: {} - {}", path_from, path_to);
 
     let from_dir_valid = Path::new(path_from).is_dir();
     let to_dir_valid = Path::new(path_to).is_dir();
+
     
     let mut code = 0;
-
+    
     if !from_dir_valid {
         code |= 1 << 1;
     }
@@ -135,6 +136,15 @@ pub fn validate_paths(path_from: &str, path_to: &str) -> Option<u32> {
     }
     if code == 0 && path_from == path_to {
         code |= 1 << 3;
+    }
+    
+    let sync_entries = database.sync_entries.lock().unwrap();
+    
+    for (_, entry) in (*sync_entries).iter() {
+        if entry.from_path == path_from && entry.to_path == path_to {
+            code |= 1 << 4;
+            break;
+        }
     }
 
     if code == 0 {

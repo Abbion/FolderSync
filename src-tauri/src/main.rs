@@ -197,7 +197,7 @@ fn main() {
     let tauri_closed_update = Arc::clone(&tauri_closed);
 
     let sync_update_handle =  Arc::new(Mutex::new(Some(thread::spawn(move ||{
-        sync_folders(local_db_update, tauri_closed_update);
+        //sync_folders(local_db_update, tauri_closed_update);
     }))));
 
     tauri::Builder::default()
@@ -220,4 +220,4 @@ fn main() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
-}
+    }
