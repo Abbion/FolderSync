@@ -18,11 +18,7 @@ Folder sync is a utility program for synchronizing files between two folders. Cr
 **This utility tool is COPYING files between folders. Be careful using it because, it might lock or even BRICK your OS**
 
 ## Installers
-Windows 64bit: Installer
-
-Windows 32bit: Installer
-
-For other systems, clone the repository and buld it using the tauri toolkit
+Windows installers are in the available in the release section. For other systems, clone the repository and build it using the tauri toolkit.
 
 ## Recommended IDE Setup
 
