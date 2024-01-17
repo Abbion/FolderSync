@@ -23,14 +23,38 @@ impl ToIntervalType for i64 {
         }
     }
 }
+
+#[derive(serde::Deserialize, Debug, Clone, Serialize, PartialEq)]
+pub enum SyncState {
+    ENABLED = 0,
+    DISABLED = 1,
+    LOCKED = 2
+}
+
+pub trait ToSyncStateType {
+    fn to_sync_state_type(self) -> SyncState;
+}
+
+impl ToSyncStateType for i64 {
+    fn to_sync_state_type(self) -> SyncState {
+        match self {
+            0 => SyncState::ENABLED,
+            1 => SyncState::DISABLED,
+            2 => SyncState::LOCKED,
+            _ => SyncState::LOCKED
+        }
+    }
+}
+
 #[derive(serde::Deserialize, Debug, Clone, Serialize)]
 pub struct SyncData {
+    pub id: u64,
     pub from_path: String,
     pub to_path: String,
     pub interval_value: u64,
     pub interval_time: u64,
     pub interval_type: IntervalType,
-    pub enabled: bool
+    pub sync_state: SyncState
 }
 
 pub struct Database {

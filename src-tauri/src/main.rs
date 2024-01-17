@@ -1,7 +1,7 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::sync::{Mutex, Arc};
+use std::sync::{Mutex, Arc, mpsc};
 use std::{thread, fs};
 use std::time::SystemTime;
 
@@ -12,6 +12,7 @@ mod sys_helper;
 mod structs;
 mod tauri_commands;
 
+use tauri::Manager;
 use tauri_commands::{*};
 use structs::{*};
 
@@ -29,7 +30,7 @@ fn load_data_from_db() -> Arc<Database> {
                 to_path TEXT,
                 interval_value INTEGER,
                 interval_type INTEGER,
-                enabled BOOLEAN
+                sync_state INTEGER
             );
             CREATE TABLE IF NOT EXISTS id_generator (
                 id INTEGER PRIMARY KEY,
@@ -74,12 +75,13 @@ fn load_data_from_db() -> Arc<Database> {
 
         while let Ok(State::Row) = statement.next() {
             let sync_entry = SyncData{
+                                        id: statement.read::<i64, _>("id").unwrap() as u64,
                                         from_path: statement.read::<String, _>("from_path").unwrap(),
                                         to_path: statement.read::<String, _>("to_path").unwrap(),
                                         interval_value: statement.read::<i64, _>("interval_value").unwrap() as u64,
                                         interval_time: 0,
                                         interval_type: statement.read::<i64, _>("interval_type").unwrap().to_interval_type(),
-                                        enabled: if statement.read::<i64, _>("enabled").unwrap() > 0 { true } else { false }
+                                        sync_state: statement.read::<i64, _>("sync_state").unwrap().to_sync_state_type()
                             };
             (*sync_entries).insert(statement.read::<i64, _>("id").unwrap() as u64, sync_entry);
         }
@@ -90,7 +92,7 @@ fn load_data_from_db() -> Arc<Database> {
     Arc::new(local_data_base)
 }
 
-fn sync_folders(database: Arc<Database>, should_close: Arc<Mutex<bool>>) {
+fn sync_folders(database: Arc<Database>, should_close: Arc<Mutex<bool>>, sender: mpsc::Sender<AppEvent>) {
     let timer = SystemTime::now();
     let mut last_recorded_seconds :u64 = 0;
     let mut delta_time : u64 = 0;
@@ -108,7 +110,7 @@ fn sync_folders(database: Arc<Database>, should_close: Arc<Mutex<bool>>) {
         }
 
         for (_, entry) in database.sync_entries.lock().unwrap().iter_mut() {
-            if entry.enabled == false {
+            if entry.sync_state != SyncState::ENABLED {
                 continue;
             }
 
@@ -121,12 +123,25 @@ fn sync_folders(database: Arc<Database>, should_close: Arc<Mutex<bool>>) {
                 let from_path = entry.from_path.clone();
                 let to_path = entry.to_path.clone();
                 
+                let from_folder_exists = sys_helper::check_if_folder_exit(&from_path);
+                let to_folder_exists = sys_helper::check_if_folder_exit(&to_path);
+
+                
+                if from_folder_exists == false || to_folder_exists == false {
+                    entry.sync_state = SyncState::LOCKED;
+
+
+
+                    sender.send(AppEvent{ event_code: EventCode::FolderNotExisting(entry.id) }).unwrap();
+                    continue;
+                }
+
                 let from_files = sys_helper::get_file_names_from_folder(&from_path);
                 let to_files = sys_helper::get_file_names_from_folder(&to_path);   
 
                 //Update shared files
                 let shared_files_list = vec_helper::find_intersection(&from_files, &to_files);
-
+    
                 for shared_file in shared_files_list {
                     let source_path = format!("{}\\{}", from_path, shared_file);
                     let destination_path = format!("{}\\{}", to_path, shared_file);
@@ -187,6 +202,19 @@ fn convert_to_seconds(interval_type: IntervalType, value: u64) -> u64 {
     }
 }
 
+enum EventCode {
+    FolderNotExisting(u64),
+}
+
+struct AppEvent {
+    event_code: EventCode,
+}
+
+#[derive(Clone, serde::Serialize)]
+struct Payload {
+  id: u64,
+}
+
 fn main() {
     let local_data_base = load_data_from_db();
 
@@ -196,15 +224,33 @@ fn main() {
     let tauri_closed = Arc::new(Mutex::new(false));
     let tauri_closed_update = Arc::clone(&tauri_closed);
 
+    let (tx, rx) = mpsc::channel::<AppEvent>();
+
     let sync_update_handle =  Arc::new(Mutex::new(Some(thread::spawn(move ||{
-        //sync_folders(local_db_update, tauri_closed_update);
+        sync_folders(local_db_update, tauri_closed_update, tx);
     }))));
 
     tauri::Builder::default()
+        .setup(|app|{
+
+            let handle_for_thread = app.handle();
+
+            thread::spawn(move || {
+                for received in rx {
+                    match received.event_code {
+                        EventCode::FolderNotExisting(id) => {
+                            handle_for_thread.emit_all("folder-not-existing-event", Payload{id: id}).unwrap();
+                        }
+                    }
+                }
+            });
+
+            Ok(())
+        })
         .manage(local_db_tauri)
         .invoke_handler(tauri::generate_handler![
-            add_sync, delete_sync, replace_sync, get_sync, switch_sync,
-            validate_paths, get_next_id, save_edited_id, reset_edit,
+            add_sync, delete_sync, replace_sync, get_sync, switch_sync, lock_sync,
+            is_locked, validate_paths, get_next_id, save_edited_id, reset_edit,
             is_edited, get_loaded_sync])
         .on_window_event(move |event| match event.event()  {
             tauri::WindowEvent::Destroyed => {

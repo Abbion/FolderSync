@@ -53,9 +53,6 @@ async function showWarning(message) {
 function pathValidationErrorIdToText(errorCode) {
     const errorMessages = [];
 
-    //1 - error
-    //2 - warning
-
     if (errorCode & (1 << 1)) errorMessages.push("From path is not valid!");
     if (errorCode & (1 << 2)) errorMessages.push("To path is not valid!");
     if (errorCode & (1 << 3)) errorMessages.push("Paths are the same. Cannot create copy loop!");

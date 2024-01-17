@@ -117,14 +117,28 @@ async function saveRecord() {
       const add_state = await addSync(data, id);
 
       if (add_state) {
-        renderRecord(data, id);
+        renderNewRecord(data, id);
       }
       else {
         showError("Adding new record failed!");
       }
     }
     else {
-      replaceSync(data, id);
+      const lockStatePromise = isSyncLocked(id);
+      const replace_state = await replaceSync(data, id);
+
+      console.log("replace_state ", replace_state);
+
+      if (replace_state) {
+        renderUpdatedRecord(data, id);
+
+        if (await lockStatePromise) {
+          updateSyncStateColor("ENABLED", id);
+        }
+      }
+      else {
+        showError("Replacing record failed!");
+      }
     }
 
     closeEditBox();
@@ -146,11 +160,11 @@ async function editRecord(id) {
   setData(await syncData);
 }
 
-async function deleteRecord(syncID) {
-  const result = await deleteSync(syncID);
+async function deleteRecord(id) {
+  const result = await deleteSync(id);
 
   if (result) {
-    const syncEntry = document.getElementById("sync-entry-" + syncID);
+    const syncEntry = document.getElementById("sync-entry-" + id);
 
     if (syncEntry){
       syncEntry.remove();
@@ -165,8 +179,13 @@ async function deleteRecord(syncID) {
 }
 
 async function enableSync(id) {
+  if (await isSyncLocked(id)) {
+    showError("One of the paths is damaged. Edit the record to update it");
+    return
+  }
+
   const newStatePromise = await switchSync(id);
-  updateSyncStateColor(newStatePromise, id);
+  updateSyncStateColor(newStatePromise ? "ENABLED" : "DISABLED", id);
 }
 
 async function openFolder(htmlElement) {
@@ -209,7 +228,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       intervalType: item.interval_type
     }
 
-    renderRecord(syncToRender, id);
-    updateSyncStateColor(item.enabled , id);
+    renderNewRecord(syncToRender, id);
+    updateSyncStateColor(item.sync_state , id);
   };
 });

@@ -1,13 +1,13 @@
 const syncEntryTemplate = `
 <div id="sync-entry-{{ id }}" class="sync-entry">
-    <div class="state" onclick="enableSync({{ id }})">
+    <div class="state" id="state-{{ id }}" onclick="enableSync({{ id }})">
     </div>
 
-    <p2 class="from-folder" title="{{ fromFolderPath }}">
+    <p2 class="from-folder" id="from-folder-{{ id }}" title="{{ fromFolderPath }}">
         {{fromFolderPath}}
     </p2>
 
-    <p2 class="to-folder" title="{{ toFolderPath }}">
+    <p2 class="to-folder" id="to-folder-{{ id }}" title="{{ toFolderPath }}">
         {{toFolderPath}}
     </p2>
     

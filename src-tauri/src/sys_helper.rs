@@ -53,3 +53,10 @@ pub fn get_file_modification_date(file_path: &String) -> Option<SystemTime> {
 
     None
 }
+
+pub fn check_if_folder_exit(path: &String) -> bool {
+    match fs::read_dir(path) {
+        Ok(_) => true,
+        _ => false
+    }
+}

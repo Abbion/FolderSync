@@ -19,9 +19,11 @@ pub fn add_sync(sync_data: SyncData, id: u64, database: tauri::State<Arc<Databas
 
     let connection = database.sql_connection.lock().unwrap();
     let insert_sync_quary = format!("
-                INSERT INTO sync (id, from_path, to_path, interval_value, interval_type, enabled) 
+                INSERT INTO sync (id, from_path, to_path, interval_value, interval_type, sync_state) 
                 VALUES ({}, '{}', '{}', {}, {}, {});
-                ", id, sync_data.from_path, sync_data.to_path, sync_data.interval_value, sync_data.interval_type as u8, sync_data.enabled);
+                ", id, sync_data.from_path, sync_data.to_path, sync_data.interval_value, sync_data.interval_type as u8, sync_data.sync_state as u8);
+
+    println!("{}", insert_sync_quary);
 
     connection.execute(insert_sync_quary).unwrap();
 
@@ -35,10 +37,16 @@ pub fn replace_sync(mut sync_data: SyncData, id: u64, database: tauri::State<Arc
     let mut sync_entries = database.sync_entries.lock().unwrap();
     
     if (*sync_entries).contains_key(&id) {
-        let old_enabled = (*sync_entries).get(&id).unwrap().enabled;
+        let old_enabled = (*sync_entries).get(&id).unwrap().sync_state.clone();
         (*sync_entries).remove(&id);
 
-        sync_data.enabled = old_enabled;
+        if old_enabled != SyncState::LOCKED {
+            sync_data.sync_state = old_enabled;
+        }
+        else {
+            sync_data.sync_state = SyncState::ENABLED;
+        }
+
         (*sync_entries).insert(id, sync_data.clone());
         
         let connection = database.sql_connection.lock().unwrap();
@@ -48,9 +56,9 @@ pub fn replace_sync(mut sync_data: SyncData, id: u64, database: tauri::State<Arc
                     to_path = '{}',
                     interval_value = {},
                     interval_type = {},
-                    enabled = {}
+                    sync_state = {}
                     WHERE id = {};",
-                    sync_data.from_path, sync_data.to_path, sync_data.interval_value, sync_data.interval_type as u8, sync_data.enabled,  id
+                    sync_data.from_path, sync_data.to_path, sync_data.interval_value, sync_data.interval_type as u8, sync_data.sync_state as u8,  id
                 );
         
         connection.execute(update_sync_quary).unwrap();
@@ -92,6 +100,11 @@ pub fn get_sync(id: u64, database: tauri::State<Arc<Database>>) -> Option<SyncDa
     }
 }
 
+#[derive(Clone, serde::Serialize)]
+struct Payload {
+  message: String,
+}
+
 #[tauri::command]
 pub fn switch_sync(id: u64, database: tauri::State<Arc<Database>>) -> Option<bool> {
     println!("Switch sync: id: {}", id);
@@ -100,21 +113,60 @@ pub fn switch_sync(id: u64, database: tauri::State<Arc<Database>>) -> Option<boo
 
     match (*sync_entries).get_mut(&id) {
         Some(sync) => { 
-            sync.enabled = !(sync.enabled);
+            if sync.sync_state == SyncState::DISABLED {
+                sync.sync_state = SyncState::ENABLED;
+            }
+            else if sync.sync_state == SyncState::ENABLED {
+                sync.sync_state = SyncState::DISABLED;
+            }
 
             let connection = database.sql_connection.lock().unwrap();
             let update_sync_quary = format!("
                         UPDATE sync SET
-                        enabled = {}
+                        sync_state = {}
                         WHERE id = {};",
-                        sync.enabled,  id
+                        sync.sync_state.clone() as u8,  id
                     );
     
             connection.execute(update_sync_quary).unwrap();
 
-            return Some(sync.enabled);
+            return Some(if sync.sync_state == SyncState::ENABLED { true } else { false });
          },
         None => { return None; }
+    }
+}
+
+#[tauri::command] 
+pub fn lock_sync(id: u64, database: tauri::State<Arc<Database>>) {
+    println!("Lock sync: id: {}", id);
+
+    let mut sync_entries = database.sync_entries.lock().unwrap();
+
+    match (*sync_entries).get_mut(&id) {
+        Some(sync) => { 
+            let connection = database.sql_connection.lock().unwrap();
+            let update_sync_quary = format!("
+                        UPDATE sync SET
+                        sync_state = {}
+                        WHERE id = {};",
+                        sync.sync_state.clone() as u8,  id
+                    );
+    
+            connection.execute(update_sync_quary).unwrap();
+         },
+        None => { }
+    }
+}
+
+#[tauri::command]
+pub fn is_locked(id: u64, database: tauri::State<Arc<Database>>) -> bool {
+    let mut sync_entries = database.sync_entries.lock().unwrap();
+
+    match (*sync_entries).get_mut(&id) {
+        Some(sync) => {
+            if sync.sync_state == SyncState::LOCKED { true } else { false }
+         },
+        None => { false }
     }
 }
 
@@ -138,12 +190,15 @@ pub fn validate_paths(database: tauri::State<Arc<Database>>, path_from: &str, pa
         code |= 1 << 3;
     }
     
-    let sync_entries = database.sync_entries.lock().unwrap();
-    
-    for (_, entry) in (*sync_entries).iter() {
-        if entry.from_path == path_from && entry.to_path == path_to {
-            code |= 1 << 4;
-            break;
+    let edit_state = database.edited_id.lock().unwrap();
+
+    if edit_state.is_none() {
+        let sync_entries = database.sync_entries.lock().unwrap();
+        for (_, entry) in (*sync_entries).iter() {
+            if entry.from_path == path_from && entry.to_path == path_to {
+                code |= 1 << 4;
+                break;
+            }
         }
     }
 
